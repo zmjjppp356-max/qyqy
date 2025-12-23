@@ -68,6 +68,36 @@
             uploadBtn.disabled = false;
         });
     </script>
+    <div id="imageContainer">
+    <img id="imagePreview" style="display:none; width: 200px;">
+    <button id="deleteBtn" style="display:none; background: red; color: white;">删除这张图片</button>
+    </div>
+
+    <script>
+        let currentFilePath = ''; // 用于记录当前上传的文件路径
+
+        // 在你之前的上传成功逻辑里赋值
+        // ... upload 成功后 ...
+        currentFilePath = data.path; // 保存路径供删除使用
+        document.getElementById('deleteBtn').style.display = 'block';
+
+        // 删除按钮点击事件
+        document.getElementById('deleteBtn').addEventListener('click', async () => {
+            if (!currentFilePath) return;
+        
+            const { data, error } = await supabaseClient
+                .storage
+                .from('images')
+                .remove([currentFilePath]);
+
+            if (!error) {
+                alert('删除成功');
+                document.getElementById('imagePreview').style.display = 'none';
+                document.getElementById('deleteBtn').style.display = 'none';
+            }
+        });
+    </script>
 </body>
 </html>
+
 

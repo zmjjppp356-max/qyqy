@@ -1,103 +1,72 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh">
 <head>
-  <meta charset="UTF-8" />
-  <title>Supabase 图片上传（带进度）</title>
-  <style>
-    body { font-family: sans-serif; }
-    progress { width: 300px; height: 20px; }
-    img { max-width: 300px; margin-top: 10px; display: block; }
-    .url { font-size: 12px; word-break: break-all; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supabase 图片上传示例</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: sans-serif; max-width: 500px; margin: 50px auto; padding: 20px; text-align: center; border: 1px solid #ddd; border-radius: 8px; }
+        .preview { max-width: 100%; margin-top: 20px; display: none; border-radius: 5px; }
+        #status { margin-top: 10px; color: #666; }
+        button { background: #3ecf8e; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin-top: 10px; }
+        button:disabled { background: #ccc; }
+    </style>
 </head>
 <body>
 
-<h2>上传图片到 Supabase</h2>
+    <h2>上传图片到 Supabase</h2>
+    <input type="file" id="fileInput" accept="image/*">
+    <button id="uploadBtn">点击上传</button>
+    
+    <p id="status"></p>
+    <img id="imagePreview" class="preview" alt="上传成功的图片">
 
-<input type="file" id="fileInput" accept="image/*" />
-<button onclick="uploadImage()">上传</button>
+    <script>
+        // 1. 初始化 Supabase (请替换为你自己的凭据)
+        const SUPABASE_URL = 'https://owxqydcogmvcbgxkanzr.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im93eHF5ZGNvZ212Y2JneGthbnpyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYxNDExOTksImV4cCI6MjA4MTcxNzE5OX0.me4eEqQ4NG1c2U1IX10efYmzisLU2Ls0unl-RgiRDaE';
+        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-<p id="status">等待上传</p>
-<progress id="progress" value="0" max="100"></progress>
+        const fileInput = document.getElementById('fileInput');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const status = document.getElementById('status');
+        const preview = document.getElementById('imagePreview');
 
-<div id="result"></div>
+        uploadBtn.addEventListener('click', async () => {
+            const file = fileInput.files[0];
+            if (!file) {
+                alert('请先选择一个文件！');
+                return;
+            }
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+            uploadBtn.disabled = true;
+            status.innerText = '正在上传...';
 
-<script>
-  const SUPABASE_URL = 'https://owxqydcogmvcbgxkanzr.supabase.co'
-  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im93eHF5ZGNvZ212Y2JneGthbnpyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYxNDExOTksImV4cCI6MjA4MTcxNzE5OX0.me4eEqQ4NG1c2U1IX10efYmzisLU2Ls0unl-RgiRDaE'
+            // 2. 生成唯一文件名 (避免同名覆盖)
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${Math.random()}.${fileExt}`;
+            const filePath = `uploads/${fileName}`;
 
-  const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
+            // 3. 执行上传 (假设 Bucket 名字叫 "images")
+            const { data, error } = await supabase.storage
+                .from('images') // 这里的 'images' 是你在 Supabase 后台创建的 Bucket 名字
+                .upload(filePath, file);
 
-  async function uploadImage() {
-    const fileInput = document.getElementById('fileInput')
-    const status = document.getElementById('status')
-    const progress = document.getElementById('progress')
-    const result = document.getElementById('result')
+            if (error) {
+                status.innerText = '错误: ' + error.message;
+            } else {
+                // 4. 获取公开访问链接 (前提是 Bucket 设为 Public)
+                const { data: publicUrlData } = supabase.storage
+                    .from('images')
+                    .getPublicUrl(filePath);
 
-    result.innerHTML = ''
-    progress.value = 0
-
-    if (!fileInput.files.length) {
-      status.innerText = '请选择图片'
-      return
-    }
-
-    const file = fileInput.files[0]
-    const filePath = `${Date.now()}_${file.name}`
-
-    status.innerText = '准备上传...'
-
-    // 使用 XMLHttpRequest 实现进度监听
-    const xhr = new XMLHttpRequest()
-    const url = `${SUPABASE_URL}/storage/v1/object/images/${filePath}`
-
-    xhr.open('PUT', url)
-    xhr.setRequestHeader('Authorization', `Bearer ${SUPABASE_KEY}`)
-    xhr.setRequestHeader('apikey', SUPABASE_KEY)
-    xhr.setRequestHeader('x-upsert', 'true')
-    // 明确设置文件的 Content-Type，便于服务端处理和调试
-    xhr.setRequestHeader('Content-Type', file.type)
-
-    xhr.upload.onprogress = (event) => {
-      console.debug('upload progress event:', event, 'fileSize:', file.size)
-      let percent = 0
-      if (event.lengthComputable && event.total) {
-        percent = Math.round((event.loaded / event.total) * 100)
-      } else if (file && file.size) {
-        // 回退到已知的文件大小进行计算
-        percent = Math.round((event.loaded / file.size) * 100)
-      }
-      progress.value = percent
-      status.innerText = `上传中：${percent}%`
-    }
-
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        status.innerText = '上传完成'
-
-        const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/images/${filePath}`
-
-        result.innerHTML = `
-          <p>上传成功</p>
-          <img src="${publicUrl}" />
-          <div class="url">${publicUrl}</div>
-        `
-      } else {
-        status.innerText = '上传失败'
-        console.error('上传失败：', xhr.status, xhr.responseText)
-      }
-    }
-
-    xhr.onerror = () => {
-      status.innerText = '网络错误'
-    }
-
-    console.debug('开始上传文件', { url, fileName: file.name, fileSize: file.size, method: 'PUT' })
-    xhr.send(file)
-  }
-</script>
-
+                status.innerText = '上传成功！';
+                preview.src = publicUrlData.publicUrl;
+                preview.style.display = 'block';
+            }
+            uploadBtn.disabled = false;
+        });
+    </script>
 </body>
 </html>

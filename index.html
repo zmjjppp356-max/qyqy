@@ -26,7 +26,7 @@
         // 1. 初始化 Supabase (请替换为你自己的凭据)
         const SUPABASE_URL = 'https://owxqydcogmvcbgxkanzr.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im93eHF5ZGNvZ212Y2JneGthbnpyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYxNDExOTksImV4cCI6MjA4MTcxNzE5OX0.me4eEqQ4NG1c2U1IX10efYmzisLU2Ls0unl-RgiRDaE';
-        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         const fileInput = document.getElementById('fileInput');
         const uploadBtn = document.getElementById('uploadBtn');
@@ -49,7 +49,7 @@
             const filePath = `uploads/${fileName}`;
 
             // 3. 执行上传 (假设 Bucket 名字叫 "images")
-            const { data, error } = await supabase.storage
+            const { data, error } = await _supabase.storage
                 .from('images') // 这里的 'images' 是你在 Supabase 后台创建的 Bucket 名字
                 .upload(filePath, file);
 
@@ -57,7 +57,7 @@
                 status.innerText = '错误: ' + error.message;
             } else {
                 // 4. 获取公开访问链接 (前提是 Bucket 设为 Public)
-                const { data: publicUrlData } = supabase.storage
+                const { data: publicUrlData } = _supabase.storage
                     .from('images')
                     .getPublicUrl(filePath);
 
@@ -70,3 +70,4 @@
     </script>
 </body>
 </html>
+

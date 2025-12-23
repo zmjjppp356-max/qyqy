@@ -3,123 +3,170 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Supabase 图片上传与历史记录</title>
+    <title>Supabase 图片库管理</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; background-color: #f9f9f9; }
-        .card { background: white; padding: 30px; border-radius: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.05); text-align: center; }
-        .controls { display: flex; flex-direction: column; gap: 15px; margin-top: 20px; }
+        .card { background: white; padding: 30px; border-radius: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.05); }
+        h2 { text-align: center; color: #333; }
+
+        /* 上传区域 */
+        .controls { display: flex; gap: 10px; margin-bottom: 10px; }
+        input[type="file"] { flex: 1; border: 1px solid #ddd; padding: 10px; border-radius: 8px; }
+        button#uploadBtn { background: #3ecf8e; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
+        #status { text-align: center; color: #666; font-size: 14px; min-height: 20px; margin-bottom: 20px; }
+
+        /* 图片网格布局 */
+        .gallery-title { border-bottom: 1px solid #eee; padding-bottom: 10px; margin-top: 30px; font-weight: bold; color: #444; }
+        .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 12px; margin-top: 15px; }
         
-        button { padding: 12px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; transition: opacity 0.2s; }
-        #uploadBtn { background: #3ecf8e; color: white; }
-        #deleteBtn { background: #ff4d4f; color: white; display: none; }
-        button:disabled { opacity: 0.5; cursor: not-allowed; }
-        
-        #status { color: #666; margin: 15px 0; font-size: 14px; }
-        
-        /* 当前预览区域 */
-        .preview-box { margin-top: 20px; border: 2px dashed #eee; padding: 10px; border-radius: 12px; background: #fafafa; min-height: 100px; display: flex; align-items: center; justify-content: center; flex-direction: column; }
-        #imagePreview { max-width: 100%; max-height: 300px; border-radius: 8px; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-        
-        /* 历史记录区域样式 */
-        .gallery-section { margin-top: 40px; text-align: left; }
-        .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; margin-top: 15px; }
-        .gallery-item { position: relative; aspect-ratio: 1; overflow: hidden; border-radius: 8px; border: 1px solid #eee; cursor: pointer; }
-        .gallery-item img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.2s; }
+        /* 单个图片容器 */
+        .gallery-item { position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.1); group: hover; }
+        .gallery-item img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s; cursor: zoom-in; }
         .gallery-item:hover img { transform: scale(1.05); }
+
+        /* 删除小按钮 (默认隐藏，鼠标悬停显示) */
+        .delete-btn {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: rgba(255, 77, 79, 0.9);
+            color: white;
+            border: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex; /* 改为 flex 方便居中 */
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            line-height: 1;
+            z-index: 10;
+            opacity: 0; /* 默认透明 */
+            transition: opacity 0.2s;
+        }
+        
+        /* 鼠标移上去时显示删除按钮 */
+        .gallery-item:hover .delete-btn { opacity: 1; }
+
+        /* 移动端直接显示删除按钮 */
+        @media (max-width: 600px) {
+            .delete-btn { opacity: 1; background: rgba(255, 77, 79, 0.8); }
+        }
     </style>
 </head>
 <body>
 
     <div class="card">
-        <h2>图片上传 & 历史记录</h2>
+        <h2>📷 云端相册管理</h2>
         
         <div class="controls">
             <input type="file" id="fileInput" accept="image/*">
-            <button id="uploadBtn">上传图片</button>
-            <button id="deleteBtn">删除刚才上传的图片</button>
+            <button id="uploadBtn">上传</button>
         </div>
-
         <p id="status">准备就绪</p>
 
-        <div class="preview-box">
-            <span id="placeholder">当前上传预览</span>
-            <img id="imagePreview" alt="当前预览">
-        </div>
-
-        <div class="gallery-section">
-            <h3>📂 历史记录 (点击图片可查看大图)</h3>
-            <div id="galleryGrid" class="gallery-grid">
-                <p style="color:#999; font-size:12px;">加载中...</p>
-            </div>
+        <div class="gallery-title">📂 历史图片 (鼠标悬停可删除)</div>
+        <div id="galleryGrid" class="gallery-grid">
+            <p style="color:#ccc; font-size:12px;">加载中...</p>
         </div>
     </div>
 
     <script>
-        // --- 1. 初始化配置 ---
+        // --- 1. 初始化 (请替换为你自己的 Key) ---
         const SUPABASE_URL = "https://owxqydcogmvcbgxkanzr.supabase.co";
         const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im93eHF5ZGNvZ212Y2JneGthbnpyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYxNDExOTksImV4cCI6MjA4MTcxNzE5OX0.me4eEqQ4NG1c2U1IX10efYmzisLU2Ls0unl-RgiRDaE";
 
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        // --- DOM 元素 ---
         const fileInput = document.getElementById('fileInput');
         const uploadBtn = document.getElementById('uploadBtn');
-        const deleteBtn = document.getElementById('deleteBtn');
         const statusText = document.getElementById('status');
-        const previewImg = document.getElementById('imagePreview');
-        const placeholder = document.getElementById('placeholder');
         const galleryGrid = document.getElementById('galleryGrid');
 
-        let currentServerPath = null; // 记录当前刚上传的那个文件路径
-
-        // --- 2. 加载历史记录函数 ---
+        // --- 2. 核心功能：加载并渲染图片列表 ---
         async function loadGallery() {
-            // 列出 uploads 文件夹下的所有文件
+            // 列出 uploads 文件夹下的文件
             const { data, error } = await supabaseClient
                 .storage
-                .from('images')
+                .from('images') // 确认 Bucket 名字
                 .list('uploads', {
-                    limit: 20, // 限制显示最近20张，你可以改大
+                    limit: 100,
                     offset: 0,
                     sortBy: { column: 'created_at', order: 'desc' },
                 });
 
             if (error) {
-                console.error("加载历史失败:", error);
-                galleryGrid.innerHTML = '<p style="color:red">历史记录加载失败</p>';
+                console.error("加载失败:", error);
+                statusText.innerText = "加载历史记录失败";
                 return;
             }
 
-            // 清空现有列表
-            galleryGrid.innerHTML = '';
+            galleryGrid.innerHTML = ''; // 清空现有内容
 
             if (!data || data.length === 0) {
-                galleryGrid.innerHTML = '<p style="color:#ccc; grid-column: 1/-1; text-align:center;">暂无历史记录</p>';
+                galleryGrid.innerHTML = '<p style="color:#ccc; padding:20px;">暂无图片</p>';
                 return;
             }
 
-            // 遍历每个文件并创建 HTML 元素
+            // 遍历每个文件，生成 HTML
             data.forEach(file => {
-                // 排除可能存在的占位空文件
-                if (file.name === '.emptyFolderPlaceholder') return;
+                if (file.name === '.emptyFolderPlaceholder') return; // 跳过占位文件
 
-                // 拼接完整路径 (注意：list返回的名字不带文件夹前缀)
                 const fullPath = `uploads/${file.name}`;
-                
-                // 获取可访问的 URL
+                // 获取图片链接
                 const { data: urlData } = supabaseClient.storage.from('images').getPublicUrl(fullPath);
 
-                // 创建图片元素
+                // 创建容器
                 const div = document.createElement('div');
                 div.className = 'gallery-item';
-                div.innerHTML = `<img src="${urlData.publicUrl}" onclick="window.open('${urlData.publicUrl}')" title="${file.name}">`;
+
+                // 1. 图片元素
+                const img = document.createElement('img');
+                img.src = urlData.publicUrl;
+                img.onclick = () => window.open(urlData.publicUrl); // 点击查看大图
                 
+                // 2. 删除按钮元素
+                const delBtn = document.createElement('button');
+                delBtn.className = 'delete-btn';
+                delBtn.innerHTML = '&times;'; // × 符号
+                delBtn.title = '删除这张图片';
+                
+                // 3. 绑定删除事件
+                delBtn.onclick = (e) => {
+                    e.stopPropagation(); // 防止触发图片的点击事件
+                    deleteSingleImage(fullPath); // 调用删除函数
+                };
+
+                // 组装
+                div.appendChild(img);
+                div.appendChild(delBtn);
                 galleryGrid.appendChild(div);
             });
         }
 
-        // --- 3. 上传功能 ---
+        // --- 3. 删除单个图片的逻辑 ---
+        async function deleteSingleImage(filePath) {
+            if (!confirm('确定要永久删除这张图片吗？')) return;
+
+            statusText.innerText = '正在删除...';
+            
+            const { data, error } = await supabaseClient.storage
+                .from('images')
+                .remove([filePath]);
+
+            if (error) {
+                alert('删除失败: ' + error.message);
+                statusText.innerText = '删除失败';
+            } else {
+                statusText.innerText = '删除成功！';
+                loadGallery(); // 重新加载列表，更新界面
+            }
+        }
+
+        // --- 4. 上传功能 ---
         uploadBtn.addEventListener('click', async () => {
             const file = fileInput.files[0];
             if (!file) { alert('请先选择文件'); return; }
@@ -127,67 +174,28 @@
             uploadBtn.disabled = true;
             statusText.innerText = '正在上传...';
 
-            // 修复中文名报错：重命名文件
+            // 重命名防止中文报错
             const fileExt = file.name.split('.').pop();
             const fileName = `${Date.now()}-${Math.floor(Math.random() * 1000)}.${fileExt}`;
             const filePath = `uploads/${fileName}`;
 
-            const { data, error } = await supabaseClient.storage
+            const { error } = await supabaseClient.storage
                 .from('images')
                 .upload(filePath, file);
 
             if (error) {
                 statusText.innerText = '上传失败: ' + error.message;
             } else {
-                currentServerPath = data.path;
                 statusText.innerText = '上传成功！';
-                
-                // 显示当前预览
-                const { data: urlData } = supabaseClient.storage.from('images').getPublicUrl(currentServerPath);
-                previewImg.src = urlData.publicUrl;
-                previewImg.style.display = 'block';
-                placeholder.style.display = 'none';
-                deleteBtn.style.display = 'inline-block';
-
-                // 🚀 关键：上传成功后刷新历史记录
-                loadGallery();
+                fileInput.value = ''; // 清空选择框
+                loadGallery(); // 刷新列表显示新图片
             }
             uploadBtn.disabled = false;
         });
 
-        // --- 4. 删除当前图片功能 ---
-        deleteBtn.addEventListener('click', async () => {
-            if (!currentServerPath || !confirm('确定删除刚才上传的这张图片吗？')) return;
-
-            deleteBtn.disabled = true;
-            statusText.innerText = '正在删除...';
-
-            const { data, error } = await supabaseClient.storage
-                .from('images')
-                .remove([currentServerPath]);
-
-            if (data && data.length > 0) {
-                statusText.innerText = '已删除当前图片';
-                // 重置当前预览界面
-                previewImg.style.display = 'none';
-                placeholder.style.display = 'inline';
-                deleteBtn.style.display = 'none';
-                fileInput.value = '';
-                currentServerPath = null;
-
-                // 🚀 关键：删除成功后刷新历史记录
-                loadGallery();
-            } else {
-                statusText.innerText = '删除失败或文件不存在';
-                console.error(error);
-            }
-            deleteBtn.disabled = false;
-        });
-
-        // --- 5. 页面加载完成后，初始化历史记录 ---
+        // 页面启动时加载
         loadGallery();
 
     </script>
 </body>
 </html>
-

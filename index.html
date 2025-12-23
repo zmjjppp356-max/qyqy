@@ -1,192 +1,129 @@
 <!DOCTYPE html>
 <html lang="zh">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Supabase 图片上传与删除</title>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supabase 图片管理系统</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-      body {
-        font-family: sans-serif;
-        max-width: 500px;
-        margin: 40px auto;
-        padding: 20px;
-        text-align: center;
-        border: 1px solid #eee;
-        border-radius: 12px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-      }
-      .controls {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        margin-bottom: 20px;
-      }
-      button {
-        padding: 10px;
-        border-radius: 6px;
-        border: none;
-        cursor: pointer;
-        font-weight: bold;
-      }
-      #uploadBtn {
-        background: #3ecf8e;
-        color: white;
-      }
-      #deleteBtn {
-        background: #ff4d4f;
-        color: white;
-        display: none;
-      }
-      button:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-      }
-      #status {
-        color: #666;
-        font-size: 14px;
-        margin: 10px 0;
-      }
-      .preview-box {
-        margin-top: 20px;
-        border: 2px dashed #ccc;
-        padding: 10px;
-        border-radius: 8px;
-        min-height: 100px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-      #imagePreview {
-        max-width: 100%;
-        border-radius: 4px;
-        display: none;
-      }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; text-align: center; background-color: #f9f9f9; }
+        .card { background: white; padding: 30px; border-radius: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.05); }
+        .controls { display: flex; flex-direction: column; gap: 15px; margin-top: 20px; }
+        input[type="file"] { border: 1px solid #ddd; padding: 8px; border-radius: 6px; width: 100%; box-sizing: border-box; }
+        button { padding: 12px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; transition: opacity 0.2s; }
+        #uploadBtn { background: #3ecf8e; color: white; }
+        #deleteBtn { background: #ff4d4f; color: white; display: none; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        #status { color: #666; font-size: 14px; margin: 15px 0; min-height: 20px; }
+        .preview-box { margin-top: 20px; border: 2px dashed #eee; padding: 10px; border-radius: 12px; background: #fafafa; }
+        #imagePreview { max-width: 100%; border-radius: 8px; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
     </style>
-  </head>
-  <body>
-    <h2>图片管理</h2>
+</head>
+<body>
 
-    <div class="controls">
-      <input type="file" id="fileInput" accept="image/*" />
-      <button id="uploadBtn">上传图片</button>
-      <button id="deleteBtn">删除此图片</button>
-    </div>
+    <div class="card">
+        <h2>图片上传与服务器删除</h2>
+        
+        <div class="controls">
+            <input type="file" id="fileInput" accept="image/*">
+            <button id="uploadBtn">开始上传</button>
+            <button id="deleteBtn">从服务器彻底删除</button>
+        </div>
 
-    <p id="status">等待操作...</p>
+        <p id="status">准备就绪</p>
 
-    <div class="preview-box">
-      <img id="imagePreview" alt="预览" />
-      <span id="placeholder">暂无预览</span>
+        <div class="preview-box">
+            <img id="imagePreview" alt="图片预览">
+            <span id="placeholder">暂无预览图</span>
+        </div>
     </div>
 
     <script>
-      // 1. 初始化客户端 (使用 supabaseClient 避免与全局对象冲突)
-      const SUPABASE_URL = "https://owxqydcogmvcbgxkanzr.supabase.co";
-      const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im93eHF5ZGNvZ212Y2JneGthbnpyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYxNDExOTksImV4cCI6MjA4MTcxNzE5OX0.me4eEqQ4NG1c2U1IX10efYmzisLU2Ls0unl-RgiRDaE";
-      const supabaseClient = supabase.createClient(
-        SUPABASE_URL,
-        SUPABASE_ANON_KEY
-      );
+        // --- 1. 初始化配置 (请务必检查 URL 和 Key) ---
+        const SUPABASE_URL = "https://owxqydcogmvcbgxkanzr.supabase.co";
+        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im93eHF5ZGNvZ212Y2JneGthbnpyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYxNDExOTksImV4cCI6MjA4MTcxNzE5OX0.me4eEqQ4NG1c2U1IX10efYmzisLU2Ls0unl-RgiRDaE";
 
-      // 获取 DOM 元素
-      const fileInput = document.getElementById("fileInput");
-      const uploadBtn = document.getElementById("uploadBtn");
-      const deleteBtn = document.getElementById("deleteBtn");
-      const statusText = document.getElementById("status");
-      const previewImg = document.getElementById("imagePreview");
-      const placeholder = document.getElementById("placeholder");
+        
+        // 使用 supabaseClient 变量名避免与全局 supabase 对象冲突
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-      // 核心变量：存储当前上传成功的文件路径
-      let currentFilePath = null;
+        const fileInput = document.getElementById('fileInput');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const deleteBtn = document.getElementById('deleteBtn');
+        const statusText = document.getElementById('status');
+        const previewImg = document.getElementById('imagePreview');
+        const placeholder = document.getElementById('placeholder');
 
-      // --- 上传功能 ---
-      uploadBtn.addEventListener("click", async () => {
-        const file = fileInput.files[0];
-        if (!file) {
-          alert("请先选择图片");
-          return;
-        }
+        // 核心变量：存储服务器返回的精确路径
+        let serverFilePath = null;
 
-        uploadBtn.disabled = true;
-        statusText.innerText = "正在上传...";
+        // --- 2. 上传逻辑 ---
+        uploadBtn.addEventListener('click', async () => {
+            const file = fileInput.files[0];
+            if (!file) { alert('请先选择文件'); return; }
 
-        // 生成唯一文件名
-        const fileExt = file.name.split(".").pop();
-        const fileName = `${Date.now()}.${fileExt}`;
-        const filePath = `uploads/${fileName}`;
+            uploadBtn.disabled = true;
+            statusText.innerText = '正在上传到服务器...';
 
-        // 调用上传 API
-        const { data, error } = await supabaseClient.storage
-          .from("images") // 确保这里的 Bucket 名字正确
-          .upload(filePath, file);
+            const fileName = `${Date.now()}-${file.name}`;
+            const filePath = `uploads/${fileName}`;
 
-        if (error) {
-          statusText.innerText = "上传失败: " + error.message;
-          console.error("Upload Error:", error);
-        } else {
-          // 成功后保存路径并显示预览
-          currentFilePath = data.path;
-          const { data: urlData } = supabaseClient.storage
-            .from("images")
-            .getPublicUrl(currentFilePath);
+            // 执行上传
+            const { data, error } = await supabaseClient.storage
+                .from('images') // 必须与后台 Bucket 名字一致
+                .upload(filePath, file);
 
-          statusText.innerText = "上传成功！";
-          previewImg.src = urlData.publicUrl;
-          previewImg.style.display = "block";
-          placeholder.style.display = "none";
-          deleteBtn.style.display = "inline-block";
-        }
-        uploadBtn.disabled = false;
-      });
-      // --- 修改后的删除功能 ---
-      deleteBtn.addEventListener("click", async () => {
-        // 检查是否有路径
-        if (!currentFilePath) {
-          console.error("没有找到文件路径，无法执行删除");
-          return;
-        }
+            if (error) {
+                statusText.innerText = '上传失败: ' + error.message;
+                console.error('上传错误详情:', error);
+            } else {
+                // 【关键修改】：直接保存服务器返回的 path，确保路径 100% 匹配
+                serverFilePath = data.path; 
+                console.log("服务器确认的存储路径:", serverFilePath);
 
-        if (!confirm("确定要从服务器彻底删除这张图片吗？")) return;
+                const { data: urlData } = supabaseClient.storage.from('images').getPublicUrl(serverFilePath);
+                
+                statusText.innerText = '上传成功！文件已存入服务器。';
+                previewImg.src = urlData.publicUrl;
+                previewImg.style.display = 'block';
+                placeholder.style.display = 'none';
+                deleteBtn.style.display = 'inline-block';
+            }
+            uploadBtn.disabled = false;
+        });
 
-        deleteBtn.disabled = true;
-        statusText.innerText = "正在执行服务器删除...";
+        // --- 3. 删除逻辑 ---
+        deleteBtn.addEventListener('click', async () => {
+            if (!serverFilePath) return;
 
-        // 打印路径以便你核对 (在浏览器 F12 控制台查看)
-        console.log("正在尝试删除的路径:", currentFilePath);
+            if (!confirm('确定要从 Supabase 服务器永久删除此图片吗？')) return;
 
-        // 调用删除 API
-        const { data, error } = await supabaseClient.storage
-          .from("images")
-          .remove([currentFilePath]);
+            deleteBtn.disabled = true;
+            statusText.innerText = '正在请求服务器删除...';
 
-        // 关键逻辑：即使没有 error，也要判断 data 是否有内容
-        // data 是一个数组，包含成功删除的文件列表
-        if (error) {
-          statusText.innerText = "服务器拒绝删除: " + error.message;
-        } else if (data && data.length > 0) {
-          // 只有进入这里，才说明图片真的从 Supabase 消失了
-          statusText.innerText = "删除成功！服务器已移除文件。";
-          console.log("被删除的文件列表:", data);
+            // 【关键修改】：使用保存的精确路径进行删除
+            const { data, error } = await supabaseClient.storage
+                .from('images')
+                .remove([serverFilePath]); // 必须是数组格式
 
-          // 重置 UI
-          currentFilePath = null;
-          previewImg.style.display = "none";
-          placeholder.style.display = "block";
-          deleteBtn.style.display = "none";
-          fileInput.value = "";
-        } else {
-          // 如果 data 是空的，说明路径没对上，服务器找不到这个文件
-          statusText.innerText = "删除未生效：服务器找不到该路径的文件。";
-          console.warn(
-            "删除返回为空，请检查路径是否包含文件夹前缀，当前路径为:",
-            currentFilePath
-          );
-        }
-        deleteBtn.disabled = false;
-      });
+            if (error) {
+                statusText.innerText = '删除失败: ' + error.message;
+            } else if (data && data.length > 0) {
+                // 只有 data 有内容才代表服务器真正删除了文件
+                statusText.innerText = '删除成功！服务器文件已移除。';
+                serverFilePath = null;
+                previewImg.style.display = 'none';
+                placeholder.style.display = 'block';
+                deleteBtn.style.display = 'none';
+                fileInput.value = ''; 
+                console.log("已从服务器移除的对象:", data);
+            } else {
+                // 如果返回空数组，通常是路径没对上或权限问题
+                statusText.innerText = '删除未生效：服务器找不到该路径的文件。';
+                console.warn("请检查路径是否包含文件夹前缀，当前尝试路径:", serverFilePath);
+            }
+            deleteBtn.disabled = false;
+        });
     </script>
-  </body>
+</body>
 </html>
-
-
